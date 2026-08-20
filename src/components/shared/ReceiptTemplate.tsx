@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import type { Payment } from '../../types';
 import { fmtDate, fmtMonth } from '../../utils/generateInvoice';
 

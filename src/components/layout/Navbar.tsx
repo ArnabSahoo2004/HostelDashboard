@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Admin } from '../../types';
-import { User, Bell, ChevronDown } from 'lucide-react';
+import { Bell, ChevronDown } from 'lucide-react';
 
 interface NavbarProps {
   admin: Admin | null;

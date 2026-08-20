@@ -9,7 +9,7 @@ export default function Kitchen() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [optOuts, setOptOuts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

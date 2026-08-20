@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Resident, Room, Bed, Booking } from '../types';
+import type { Resident, Room, Booking } from '../types';
 import pb from '../api/client';
 import { 
   Users, 
@@ -14,9 +14,7 @@ import {
   UserX, 
   Calendar, 
   MapPin, 
-  Info,
   X,
-  Plus,
   AlertTriangle
 } from 'lucide-react';
 

@@ -9,8 +9,7 @@ import {
   CheckCircle,
   X,
   IndianRupee,
-  Calendar,
-  Clock
+  Calendar
 } from 'lucide-react';
 
 export default function ElectricityTab() {

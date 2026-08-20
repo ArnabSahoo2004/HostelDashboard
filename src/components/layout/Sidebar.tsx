@@ -8,7 +8,6 @@ import {
   Settings, 
   LogOut, 
   Wrench,
-  Activity,
   MessageSquare,
   Utensils
 } from 'lucide-react';

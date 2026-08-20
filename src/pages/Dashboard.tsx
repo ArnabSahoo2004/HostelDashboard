@@ -13,7 +13,6 @@ import {
   MapPin,
   Clock,
   Calendar,
-  CheckCircle,
   AlertTriangle
 } from 'lucide-react';
 

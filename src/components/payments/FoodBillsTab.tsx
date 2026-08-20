@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import pb from '../../api/client';
 import type { Resident } from '../../types';
 import { 
   Utensils, 
   AlertTriangle,
   IndianRupee,
-  Calendar,
   CheckCircle,
-  Plus,
   Receipt
 } from 'lucide-react';
 

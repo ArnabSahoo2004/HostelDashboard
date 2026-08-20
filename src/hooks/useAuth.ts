@@ -12,7 +12,7 @@ export const useAuth = () => {
     setAdmin(pb.authStore.record as unknown as Admin | null);
 
     // Subscribe to auth state changes
-    const unsubscribe = pb.authStore.onChange((token, model) => {
+    const unsubscribe = pb.authStore.onChange((_token, model) => {
       setAdmin(model as unknown as Admin | null);
     });
 

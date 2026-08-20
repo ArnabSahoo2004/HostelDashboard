@@ -69,7 +69,7 @@ export interface Payment {
   amount: number;
   dueDate: string;
   paidDate?: string;
-  paymentType?: 'rent' | 'electricity' | 'other';
+  paymentType?: 'rent' | 'electricity' | 'food' | 'other';
   status: 'paid' | 'pending' | 'overdue';
   created: string;
   expand?: any;
