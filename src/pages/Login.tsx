@@ -25,7 +25,7 @@ const Login: React.FC<LoginProps> = ({ login, error, clearError }) => {
     }
 
     setLoading(true);
-    const _success = await login(email, password);
+    await login(email, password);
     setLoading(false);
   };
 

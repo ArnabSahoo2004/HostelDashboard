@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { pb } from '../../api/client';
 import type { Resident } from '../../types';
-import { Calendar as CalendarIcon, CheckCircle, XCircle } from 'lucide-react';
 
 interface ResidentCalendarProps {
   residents: Resident[];
