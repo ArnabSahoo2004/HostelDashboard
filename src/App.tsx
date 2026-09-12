@@ -9,8 +9,10 @@ import Payments from './pages/Payments';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
 
-import Kitchen from './pages/Kitchen';
 import Maintenance from './pages/Maintenance';
+import PublicMaintenance from './pages/PublicMaintenance';
+import Notices from './pages/Notices';
+import FinesDeposits from './pages/FinesDeposits';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
@@ -33,6 +35,9 @@ const App: React.FC = () => {
           }
         />
 
+        {/* Public Maintenance Route */}
+        <Route path="/report-issue" element={<PublicMaintenance />} />
+
         {/* Protected Core Dashboard Shell */}
         <Route
           path="/*"
@@ -50,8 +55,9 @@ const App: React.FC = () => {
                       <Route path="/payments" element={<Payments />} />
 
                       <Route path="/whatsapp" element={<WhatsApp />} />
-                      <Route path="/kitchen" element={<Kitchen />} />
                       <Route path="/maintenance" element={<Maintenance />} />
+                      <Route path="/notices" element={<Notices />} />
+                      <Route path="/fines" element={<FinesDeposits />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

@@ -9,7 +9,8 @@ import {
   CheckCircle,
   X,
   IndianRupee,
-  Calendar
+  Calendar,
+  Trash2
 } from 'lucide-react';
 
 export default function ElectricityTab() {
@@ -22,11 +23,10 @@ export default function ElectricityTab() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [billingMonth, setBillingMonth] = useState(new Date().toISOString().substring(0, 7));
-  const [previousReading, setPreviousReading] = useState('');
-  const [currentReading, setCurrentReading] = useState('');
-  const [ratePerUnit, setRatePerUnit] = useState('7');
   const [dueDate, setDueDate] = useState('');
-  const [isFirstTime, setIsFirstTime] = useState(true);
+  
+  // Meters State
+  const [meters, setMeters] = useState([{ id: Date.now(), name: 'Main Meter', prev: '', curr: '', rate: '7', isFirstTime: true }]);
   const [loadingPrevReading, setLoadingPrevReading] = useState(false);
   
   const [actionLoading, setActionLoading] = useState(false);
@@ -63,8 +63,7 @@ export default function ElectricityTab() {
   // Auto-fetch previous reading when a room is selected
   useEffect(() => {
     if (!selectedRoomId) {
-      setPreviousReading('');
-      setIsFirstTime(true);
+      setMeters([{ id: Date.now(), name: 'Main Meter', prev: '', curr: '', rate: '7', isFirstTime: true }]);
       return;
     }
     const fetchLastReading = async () => {
@@ -76,15 +75,32 @@ export default function ElectricityTab() {
         });
         if (lastBills.items.length > 0) {
           const lastBill = lastBills.items[0] as any;
-          setPreviousReading(String(lastBill.currentReading));
-          setIsFirstTime(false);
+          if (lastBill.meters && lastBill.meters.length > 0) {
+             const newMeters = lastBill.meters.map((m: any) => ({
+                id: Math.random(),
+                name: m.name || 'Meter',
+                prev: String(m.currentReading),
+                curr: '',
+                rate: String(m.ratePerUnit || '7'),
+                isFirstTime: false
+             }));
+             setMeters(newMeters);
+          } else {
+             // Legacy fallback
+             setMeters([{
+                id: Date.now(),
+                name: 'Main Meter',
+                prev: String(lastBill.currentReading || 0),
+                curr: '',
+                rate: String(lastBill.ratePerUnit || '7'),
+                isFirstTime: false
+             }]);
+          }
         } else {
-          setPreviousReading('');
-          setIsFirstTime(true);
+          setMeters([{ id: Date.now(), name: 'Main Meter', prev: '', curr: '', rate: '7', isFirstTime: true }]);
         }
       } catch {
-        setPreviousReading('');
-        setIsFirstTime(true);
+        setMeters([{ id: Date.now(), name: 'Main Meter', prev: '', curr: '', rate: '7', isFirstTime: true }]);
       } finally {
         setLoadingPrevReading(false);
       }
@@ -92,15 +108,19 @@ export default function ElectricityTab() {
     fetchLastReading();
   }, [selectedRoomId]);
 
-  const totalAmount = React.useMemo(() => {
-    const prev = Number(previousReading) || 0;
-    const curr = Number(currentReading) || 0;
-    const rate = Number(ratePerUnit) || 0;
+  const calculateMeterAmount = (prevStr: string, currStr: string, rateStr: string) => {
+    const prev = Number(prevStr) || 0;
+    const curr = Number(currStr) || 0;
+    const rate = Number(rateStr) || 0;
     if (curr > prev) {
       return (curr - prev) * rate;
     }
     return 0;
-  }, [previousReading, currentReading, ratePerUnit]);
+  };
+
+  const totalAmount = React.useMemo(() => {
+    return meters.reduce((sum, m) => sum + calculateMeterAmount(m.prev, m.curr, m.rate), 0);
+  }, [meters]);
 
   const handleCreateBill = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,27 +128,39 @@ export default function ElectricityTab() {
        alert('Total amount must be greater than 0. Check readings and rate.');
        return;
     }
+    // Verify all meters have valid names
+    if (meters.some(m => !m.name.trim())) {
+       alert('All meters must have a valid name.');
+       return;
+    }
+
     setActionLoading(true);
     try {
       const monthStart = `${billingMonth}-01 12:00:00.000Z`;
       const dueStart = `${dueDate} 12:00:00.000Z`;
+      
+      const structuredMeters = meters.map(m => ({
+        name: m.name.trim(),
+        previousReading: Number(m.prev) || 0,
+        currentReading: Number(m.curr) || 0,
+        ratePerUnit: Number(m.rate) || 0,
+        amount: calculateMeterAmount(m.prev, m.curr, m.rate),
+        isFirstTime: m.isFirstTime
+      }));
+
       await pb.collection('electricity_bills').create({
         room: selectedRoomId,
         billingMonth: monthStart,
-        previousReading: Number(previousReading),
-        currentReading: Number(currentReading),
-        ratePerUnit: Number(ratePerUnit),
+        meters: structuredMeters,
         totalAmount,
         dueDate: dueStart,
         status: 'draft'
       });
+
       setIsAddOpen(false);
       setSelectedRoomId('');
-      setPreviousReading('');
-      setCurrentReading('');
-      setRatePerUnit('7');
+      setMeters([{ id: Date.now(), name: 'Main Meter', prev: '', curr: '', rate: '7', isFirstTime: true }]);
       setDueDate('');
-      setIsFirstTime(true);
       fetchData();
     } catch (err: any) {
       alert(err.message || 'Failed to create bill');
@@ -156,15 +188,29 @@ export default function ElectricityTab() {
       const splitAmount = Math.ceil(bill.totalAmount / activeBookings.length);
       
       for (const booking of activeBookings) {
-        await pb.collection('payments').create({
-          resident: booking.resident,
-          booking: booking.id,
-          monthFor: bill.billingMonth,
-          amount: splitAmount,
-          dueDate: bill.dueDate,
-          status: 'pending',
-          paymentType: 'electricity'
+        const existingInvoices = await pb.collection('payments').getList(1, 1, {
+           filter: `resident = '${booking.resident}' && monthFor = '${bill.billingMonth}'`
         });
+        
+        if (existingInvoices.items.length > 0) {
+           const invoice = existingInvoices.items[0] as any;
+           await pb.collection('payments').update(invoice.id, {
+              electricityAmount: splitAmount,
+              amount: (invoice.rentAmount || 0) + splitAmount + (invoice.fineAmount || 0)
+           });
+        } else {
+           await pb.collection('payments').create({
+              resident: booking.resident,
+              booking: booking.id,
+              monthFor: bill.billingMonth,
+              rentAmount: 0,
+              electricityAmount: splitAmount,
+              fineAmount: 0,
+              amount: splitAmount,
+              dueDate: bill.dueDate,
+              status: 'pending'
+           });
+        }
       }
 
       await pb.collection('electricity_bills').update(bill.id, {
@@ -175,6 +221,25 @@ export default function ElectricityTab() {
       alert(`Successfully split ₹${bill.totalAmount} among ${activeBookings.length} residents (₹${splitAmount} each).`);
     } catch (err: any) {
       alert(err.message || 'Failed to split bill');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteBill = async (bill: ElectricityBill) => {
+    let message = 'Are you sure you want to delete this bill?';
+    if (bill.status === 'split_and_billed') {
+      message = 'WARNING: This bill has already been split among residents. Deleting this record here will NOT automatically remove the electricity charges from the residents\' pending invoices. You will need to manually adjust their invoices if needed.\n\nDo you still want to delete this record?';
+    }
+
+    if (!window.confirm(message)) return;
+
+    setActionLoading(true);
+    try {
+      await pb.collection('electricity_bills').delete(bill.id);
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete bill');
     } finally {
       setActionLoading(false);
     }
@@ -211,7 +276,7 @@ export default function ElectricityTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {bills.map(bill => (
             <div key={bill.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-4 pr-8 relative">
                 <div>
                   <div className="text-xl font-bold text-slate-100">
                     Room {bill.expand?.room?.roomNumber}
@@ -223,6 +288,15 @@ export default function ElectricityTab() {
                 }`}>
                   {bill.status === 'split_and_billed' ? 'Billed' : 'Draft'}
                 </div>
+                
+                <button
+                  disabled={actionLoading}
+                  onClick={() => handleDeleteBill(bill)}
+                  className="absolute -top-2 -right-2 p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                  title="Delete Bill"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
 
               <div className="space-y-3 mb-6">
@@ -231,9 +305,23 @@ export default function ElectricityTab() {
                   <span className="text-slate-200">{new Date(bill.billingMonth).toLocaleDateString('default', { month: 'long', year: 'numeric' })}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Units</span>
-                  <span className="text-slate-200">{(bill.currentReading || 0) - (bill.previousReading || 0)} @ ₹{bill.ratePerUnit}/unit</span>
+                  <span className="text-slate-400">Total Units</span>
+                  <span className="text-slate-200">
+                    {bill.meters && bill.meters.length > 0 
+                      ? bill.meters.reduce((sum, m) => sum + (m.currentReading - m.previousReading), 0)
+                      : (bill.currentReading || 0) - (bill.previousReading || 0)} units
+                  </span>
                 </div>
+                {bill.meters && bill.meters.length > 0 && (
+                  <div className="flex flex-col gap-1 text-xs text-slate-500 pt-1 pb-1">
+                    {bill.meters.map((m, idx) => (
+                       <div key={idx} className="flex justify-between">
+                         <span>- {m.name}</span>
+                         <span>₹{m.amount}</span>
+                       </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-sm pt-2 border-t border-slate-800">
                   <span className="text-slate-300 font-semibold flex items-center gap-2"><IndianRupee className="w-4 h-4"/> Total</span>
                   <span className="text-amber-400 font-bold text-lg">₹{bill.totalAmount}</span>
@@ -271,8 +359,8 @@ export default function ElectricityTab() {
       {/* Add Bill Modal */}
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-850 rounded-2xl shadow-2xl overflow-hidden animate-zoom-in">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-850 rounded-2xl shadow-2xl overflow-hidden animate-zoom-in max-h-[90vh] flex flex-col">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0">
               <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                 <Zap className="w-5 h-5 text-amber-500" />
                 Add Room Bill
@@ -284,7 +372,8 @@ export default function ElectricityTab() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreateBill} className="p-5 space-y-4">
+            <form onSubmit={handleCreateBill} className="p-5 overflow-y-auto">
+              <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-400 block">Select Room *</label>
                 <select
@@ -311,58 +400,113 @@ export default function ElectricityTab() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                    Starting Units
-                    {!isFirstTime && <span className="text-amber-500 text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Auto-filled</span>}
-                    {isFirstTime && <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">First time</span>}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={loadingPrevReading ? '' : previousReading}
-                      onChange={(e) => setPreviousReading(e.target.value)}
-                      readOnly={!isFirstTime}
-                      placeholder={loadingPrevReading ? 'Fetching...' : isFirstTime ? 'Enter starting units' : ''}
-                      className={`w-full border rounded-xl py-2 px-3.5 text-sm focus:outline-none transition-colors ${
-                        !isFirstTime
-                          ? 'bg-slate-800 border-amber-500/30 text-amber-300 cursor-not-allowed'
-                          : 'bg-slate-950 border-slate-800 text-slate-200 focus:border-amber-500'
-                      }`}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400 block">Current Reading *</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={currentReading}
-                    onChange={(e) => setCurrentReading(e.target.value)}
-                    placeholder="Enter new meter reading"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400 block">Rate Per Unit (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.1"
-                    value={ratePerUnit}
-                    onChange={(e) => setRatePerUnit(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                  <p className="text-[10px] text-slate-600">Default: ₹7/unit</p>
+              {/* Dynamic Meters Section */}
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                   <h4 className="text-sm font-bold text-slate-200">Meter Readings</h4>
+                   <button 
+                     type="button" 
+                     onClick={() => setMeters([...meters, { id: Date.now(), name: `Meter ${meters.length + 1}`, prev: '', curr: '', rate: '7', isFirstTime: true }])}
+                     className="text-xs font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-3 py-1 rounded-lg transition-colors flex items-center gap-1"
+                   >
+                     <Plus className="w-3 h-3" /> Add Meter
+                   </button>
                 </div>
+
+                {meters.map((meter, index) => (
+                  <div key={meter.id} className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800 space-y-4 relative">
+                    {meters.length > 1 && (
+                      <button 
+                        type="button"
+                        onClick={() => setMeters(meters.filter(m => m.id !== meter.id))}
+                        className="absolute -top-2 -right-2 bg-rose-500/20 text-rose-500 hover:bg-rose-500 text-xs w-6 h-6 flex items-center justify-center rounded-full transition-colors hover:text-white"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-400 block">Meter Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={meter.name}
+                          onChange={(e) => {
+                             const newMeters = [...meters];
+                             newMeters[index].name = e.target.value;
+                             setMeters(newMeters);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-400 block">Rate Per Unit (₹) *</label>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          step="0.1"
+                          value={meter.rate}
+                          onChange={(e) => {
+                             const newMeters = [...meters];
+                             newMeters[index].rate = e.target.value;
+                             setMeters(newMeters);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                          Start Units
+                          {!meter.isFirstTime && <span className="text-amber-500 text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 border border-amber-500/20 px-1 rounded-sm">Auto</span>}
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          value={loadingPrevReading ? '' : meter.prev}
+                          onChange={(e) => {
+                             const newMeters = [...meters];
+                             newMeters[index].prev = e.target.value;
+                             setMeters(newMeters);
+                          }}
+                          readOnly={!meter.isFirstTime}
+                          placeholder={loadingPrevReading ? 'Fetching...' : ''}
+                          className={`w-full border rounded-xl py-2 px-3.5 text-sm focus:outline-none transition-colors ${
+                            !meter.isFirstTime
+                              ? 'bg-slate-800 border-amber-500/30 text-amber-300 cursor-not-allowed'
+                              : 'bg-slate-900 border-slate-700 text-slate-200 focus:border-amber-500'
+                          }`}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-400 block">End Units *</label>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          value={meter.curr}
+                          onChange={(e) => {
+                             const newMeters = [...meters];
+                             newMeters[index].curr = e.target.value;
+                             setMeters(newMeters);
+                          }}
+                          placeholder="New reading"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 space-y-4">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-400 block">Due Date *</label>
                   <input

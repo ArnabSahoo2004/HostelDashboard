@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Wifi, WifiOff, Send, MessageSquare } from 'lucide-react';
+import { Settings, Wifi, WifiOff, Send, MessageSquare, ShieldAlert } from 'lucide-react';
 import pb from '../api/client';
+import type { Settings as SettingsType } from '../types';
 
 export default function WhatsApp() {
-  const [status, setStatus] = useState<{ connected: boolean; qrCode: string | null }>({
-    connected: false,
-    qrCode: null
-  });
+  const [settings, setSettings] = useState<SettingsType | null>(null);
   const [loading, setLoading] = useState(true);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [alert, setAlert] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning'; msg: string } | null>(null);
 
   const templates = [
     "Notice: Water supply will be suspended tomorrow from 10 AM to 12 PM due to maintenance.",
@@ -19,32 +17,29 @@ export default function WhatsApp() {
     "Notice: The main gate will be closed at 10 PM tonight. Please return on time."
   ];
 
-  const fetchStatus = async () => {
+  const fetchSettings = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/whatsapp/status');
-      const data = await res.json();
-      setStatus(data);
+      const records = await pb.collection('settings').getFullList();
+      if (records.length > 0) {
+        setSettings(records[0] as unknown as SettingsType);
+      }
     } catch (err) {
-      console.error('Failed to fetch WhatsApp status', err);
+      console.error('Failed to fetch settings', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Poll for QR code status every 3 seconds if not connected
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(() => {
-      if (!status.connected) {
-        fetchStatus();
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [status.connected]);
+    fetchSettings();
+  }, []);
+
+  const isConnected = !!(settings?.whatsappApiKey && settings?.whatsappPhoneNumberId);
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastMessage.trim()) return;
+    if (!settings?.whatsappApiKey || !settings?.whatsappPhoneNumberId) return;
 
     setSending(true);
     setAlert(null);
@@ -63,97 +58,140 @@ export default function WhatsApp() {
         return;
       }
 
-      const res = await fetch('http://localhost:5000/api/whatsapp/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phones, message: broadcastMessage })
-      });
+      let successCount = 0;
+      let failureCount = 0;
 
-      const data = await res.json();
-      if (res.ok) {
-        setAlert({ type: 'success', msg: data.message });
+      // Send to Meta API
+      for (const phone of phones) {
+        let cleanPhone = phone.replace(/\D/g, '');
+        // Default to India (+91) if 10 digits
+        if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+
+        const payload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: cleanPhone,
+          type: "text",
+          text: { preview_url: false, body: broadcastMessage }
+        };
+
+        const res = await fetch(`https://graph.facebook.com/v20.0/${settings.whatsappPhoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${settings.whatsappApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          successCount++;
+        } else {
+          failureCount++;
+          const errData = await res.json();
+          console.error(`Failed to send to ${cleanPhone}:`, errData);
+        }
+      }
+
+      if (failureCount === 0) {
+        setAlert({ type: 'success', msg: `Successfully broadcasted to ${successCount} residents.` });
         setBroadcastMessage('');
+      } else if (successCount > 0) {
+        setAlert({ type: 'warning', msg: `Sent to ${successCount} residents, but failed for ${failureCount}. See console for details.` });
       } else {
-        setAlert({ type: 'error', msg: data.error || 'Failed to send broadcast.' });
+        setAlert({ type: 'error', msg: `Failed to send to all ${failureCount} residents.` });
       }
     } catch (err: any) {
-      setAlert({ type: 'error', msg: err.message || 'An error occurred.' });
+      setAlert({ type: 'error', msg: err.message || 'An error occurred during broadcast.' });
     } finally {
       setSending(false);
     }
   };
 
   if (loading) {
-    return <div className="p-6">Loading WhatsApp Status...</div>;
+    return <div className="p-6">Loading WhatsApp Configuration...</div>;
   }
+
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">WhatsApp Integration</h1>
-        <div className={`flex items-center space-x-2 px-4 py-2 rounded-full ${status.connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {status.connected ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
-          <span className="font-semibold">{status.connected ? 'Connected' : 'Disconnected'}</span>
+        <h1 className="text-3xl font-bold text-slate-100">WhatsApp Integration</h1>
+        <div className={`flex items-center space-x-2 px-4 py-2 rounded-full ${isConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+          {isConnected ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+          <span className="font-semibold text-sm">{isConnected ? 'Connected to Meta API' : 'Not Configured'}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Connection Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center dark:text-white">
-            <QrCode className="w-5 h-5 mr-2 text-indigo-600" />
-            Connection Status
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6">
+          <h2 className="text-xl font-bold text-slate-100 mb-4 flex items-center">
+            <Settings className="w-5 h-5 mr-2 text-primary-500" />
+            Meta API Status
           </h2>
 
-          {status.connected ? (
+          {isConnected ? (
             <div className="text-center py-8">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Wifi className="w-10 h-10 text-green-600" />
+              <div className="w-20 h-20 bg-emerald-500/10 border-2 border-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Wifi className="w-10 h-10 text-emerald-500" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">WhatsApp is Active</h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                Your backend is successfully connected to WhatsApp. The bot is running and listening for commands!
+              <h3 className="text-lg font-bold text-slate-100 mb-2">System is Ready</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                Your dashboard is securely connected to the official Meta WhatsApp Cloud API.
               </p>
+              
+              <div className="bg-slate-800/50 rounded-xl p-4 text-left border border-slate-700">
+                <div className="flex items-center gap-2 text-amber-400 mb-2">
+                  <ShieldAlert className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Meta 24h Policy</span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  You can send these free-form messages to any resident who has messaged your business number within the last 24 hours. For proactive alerts outside this window, Meta requires pre-approved template messages.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="text-center py-4">
-              {status.qrCode ? (
-                <>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">Scan this QR Code with your WhatsApp app (Linked Devices):</p>
-                  <img src={status.qrCode} alt="WhatsApp QR Code" className="mx-auto border p-2 rounded-lg bg-white" />
-                </>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400">Generating QR Code... Please wait.</p>
-              )}
+            <div className="text-center py-8">
+              <div className="w-20 h-20 bg-rose-500/10 border-2 border-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <WifiOff className="w-10 h-10 text-rose-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-100 mb-2">Action Required</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                You need to configure your Meta API credentials before sending broadcasts.
+              </p>
+              <p className="text-xs text-slate-500 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                Go to <strong>Settings &gt; Notifications</strong> and enter your <strong>Meta Phone Number ID</strong> and <strong>Permanent Access Token</strong>.
+              </p>
             </div>
           )}
         </div>
 
         {/* Broadcast Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center dark:text-white">
-            <MessageSquare className="w-5 h-5 mr-2 text-indigo-600" />
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6">
+          <h2 className="text-xl font-bold text-slate-100 mb-4 flex items-center">
+            <MessageSquare className="w-5 h-5 mr-2 text-primary-500" />
             Hostel Broadcast
           </h2>
 
           <form onSubmit={handleBroadcast} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-bold text-slate-400 mb-2">
                 Message to All Active Residents
               </label>
               <textarea
                 value={broadcastMessage}
                 onChange={(e) => setBroadcastMessage(e.target.value)}
                 rows={5}
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white resize-none"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none transition-all disabled:opacity-50"
                 placeholder="E.g., Notice: Water supply will be suspended tomorrow from 10 AM to 12 PM."
-                disabled={!status.connected}
+                disabled={!isConnected}
               />
             </div>
 
             {/* Quick Templates */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Quick Templates
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Quick Texts
               </label>
               <div className="flex flex-wrap gap-2">
                 {templates.map((template, idx) => (
@@ -161,8 +199,8 @@ export default function WhatsApp() {
                     key={idx}
                     type="button"
                     onClick={() => setBroadcastMessage(template)}
-                    disabled={!status.connected}
-                    className="text-left text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 py-1.5 px-3 rounded-lg border border-transparent hover:border-gray-300 dark:hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!isConnected}
+                    className="text-left text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 px-3 rounded-xl border border-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {template.length > 30 ? template.substring(0, 30) + '...' : template}
                   </button>
@@ -171,18 +209,22 @@ export default function WhatsApp() {
             </div>
 
             {alert && (
-              <div className={`p-3 rounded-lg text-sm ${alert.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              <div className={`p-4 rounded-xl text-sm border ${
+                alert.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                alert.type === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              }`}>
                 {alert.msg}
               </div>
             )}
 
             <button
               type="submit"
-              disabled={!status.connected || sending}
-              className="w-full flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!isConnected || sending}
+              className="w-full flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? (
-                <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
               ) : (
                 <>
                   <Send className="w-5 h-5" />

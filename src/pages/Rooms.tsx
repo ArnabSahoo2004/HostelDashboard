@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import type { Room, Bed, Resident } from '../types';
 import pb from '../api/client';
-import { 
-  Building, 
-  Layers, 
-  Home, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  X, 
-  Bed as BedIcon, 
-  Save, 
+import {
+  Building,
+  Layers,
+  Home,
+  Plus,
+  Trash2,
+  Edit3,
+  X,
+  Bed as BedIcon,
+  Save,
   AlertTriangle,
   ChevronRight,
   ArrowLeft,
@@ -96,7 +96,7 @@ const Rooms: React.FC = () => {
       setLoading(true);
       const records = await pb.collection('rooms').getFullList({
         sort: 'roomNumber',
-        expand: 'beds_via_room' 
+        expand: 'beds_via_room'
       });
       const mappedRooms = records.map(r => ({
         id: r.id,
@@ -110,10 +110,10 @@ const Rooms: React.FC = () => {
         attachedBathroom: r.attachedBathroom,
         balcony: r.balcony,
         beds: r.expand?.beds_via_room?.map((b: any) => ({
-            id: b.id,
-            roomId: b.room,
-            bedLabel: b.bedLabel,
-            status: b.status
+          id: b.id,
+          roomId: b.room,
+          bedLabel: b.bedLabel,
+          status: b.status
         })) || []
       }));
       setRooms(mappedRooms as unknown as Room[]);
@@ -139,7 +139,7 @@ const Rooms: React.FC = () => {
   }, [rooms, selectedRoom]);
 
   const openAddModal = () => {
-    setHostel(activeHostel || 'Hostel 1');
+    setHostel(activeHostel || displayHostels[0] || 'Hostel 1');
     setRoomNumber('');
     setFloor(activeFloor !== null ? activeFloor.toString() : '');
     setRoomType('2 sharing');
@@ -200,7 +200,7 @@ const Rooms: React.FC = () => {
 
       // Also create empty beds for this room based on capacity
       const cap = parseInt(capacity, 10);
-      for(let i=1; i<=cap; i++) {
+      for (let i = 1; i <= cap; i++) {
         await pb.collection('beds').create({
           room: room.id,
           bedLabel: `Bed ${i}`,
@@ -224,12 +224,53 @@ const Rooms: React.FC = () => {
     setFormLoading(true);
 
     try {
+      const newCapacity = parseInt(capacity, 10);
+      
+      // Fetch existing beds
+      const existingBeds = await pb.collection('beds').getFullList({
+        filter: `room = '${selectedRoom.id}'`
+      });
+
+      if (newCapacity < existingBeds.length) {
+        // Need to remove beds
+        const bedsToDelete = existingBeds.sort((a, b) => {
+          const aNum = parseInt(a.bedLabel.replace(/\D/g, '')) || 0;
+          const bNum = parseInt(b.bedLabel.replace(/\D/g, '')) || 0;
+          return bNum - aNum; // descending, remove highest numbers first
+        }).slice(0, existingBeds.length - newCapacity);
+
+        const occupied = bedsToDelete.filter(b => b.status === 'occupied' || b.status === 'maintenance');
+        if (occupied.length > 0) {
+          throw new Error("Cannot reduce capacity: Some beds to be removed are currently occupied.");
+        }
+
+        for (const bed of bedsToDelete) {
+          await pb.collection('beds').delete(bed.id);
+        }
+      } else if (newCapacity > existingBeds.length) {
+        // Need to add beds
+        let maxBedNum = 0;
+        existingBeds.forEach(b => {
+          const num = parseInt(b.bedLabel.replace(/\D/g, '')) || 0;
+          if (num > maxBedNum) maxBedNum = num;
+        });
+
+        const bedsToAdd = newCapacity - existingBeds.length;
+        for (let i = 1; i <= bedsToAdd; i++) {
+          await pb.collection('beds').create({
+            room: selectedRoom.id,
+            bedLabel: `Bed ${maxBedNum + i}`,
+            status: 'vacant'
+          });
+        }
+      }
+
       await pb.collection('rooms').update(selectedRoom.id, {
         roomNumber,
         hostel,
         floor: floor ? parseInt(floor, 10) : null,
         roomType,
-        capacity: parseInt(capacity, 10),
+        capacity: newCapacity,
         monthlyRent: parseFloat(monthlyRent),
         ac,
         attachedBathroom,
@@ -305,7 +346,7 @@ const Rooms: React.FC = () => {
       await pb.collection('bookings').update(selectedBookingId, {
         checkOutDate: checkOutDate + ' 12:00:00.000Z'
       });
-      
+
       const booking = await pb.collection('bookings').getOne(selectedBookingId);
       await pb.collection('beds').update(booking.bed, { status: 'vacant' });
 
@@ -396,8 +437,8 @@ const Rooms: React.FC = () => {
   };
 
   const getFloorStats = (hostelName: string, floorNum: number) => {
-    const floorRooms = rooms.filter(r => 
-      r.hostel === hostelName && 
+    const floorRooms = rooms.filter(r =>
+      r.hostel === hostelName &&
       (r.floor === floorNum || (floorNum === 0 && (r.floor === null || r.floor === undefined)))
     );
     let totalBeds = 0;
@@ -415,13 +456,18 @@ const Rooms: React.FC = () => {
   // Extract floors inside selected hostel (map null to 0 for Ground Floor)
   const activeHostelFloors = activeHostel
     ? Array.from(
-        new Set(
-          rooms
-            .filter((r) => r.hostel === activeHostel)
-            .map((r) => (r.floor === null || r.floor === undefined ? 0 : r.floor))
-        )
-      ).sort((a, b) => a - b)
+      new Set(
+        rooms
+          .filter((r) => r.hostel === activeHostel)
+          .map((r) => (r.floor === null || r.floor === undefined ? 0 : r.floor))
+      )
+    ).sort((a, b) => a - b)
     : [];
+
+  // Dynamically derive unique hostel names from actual rooms in DB
+  const hostelNames = Array.from(new Set(rooms.map(r => r.hostel).filter(Boolean))).sort();
+  // Always show at least Hostel 1 & Hostel 2 as placeholders when empty
+  const displayHostels = hostelNames.length > 0 ? hostelNames : ['Hostel 1', 'Hostel 2'];
 
   // Filtered rooms list for Level 3
   const activeRooms = rooms.filter(
@@ -434,7 +480,7 @@ const Rooms: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-1 text-xs text-slate-400 font-semibold mb-2">
-            <span 
+            <span
               onClick={() => { setActiveHostel(null); setActiveFloor(null); }}
               className="hover:text-primary-400 cursor-pointer transition-colors"
             >
@@ -443,7 +489,7 @@ const Rooms: React.FC = () => {
             {activeHostel && (
               <>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                <span 
+                <span
                   onClick={() => setActiveFloor(null)}
                   className="hover:text-primary-400 cursor-pointer transition-colors"
                 >
@@ -462,11 +508,11 @@ const Rooms: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <Building className="w-6 h-6 text-primary-500" />
             <span>
-              {!activeHostel 
-                ? 'Hostel Selection' 
-                : activeFloor === null 
-                ? `${activeHostel} Floors` 
-                : `${activeHostel} — Floor ${activeFloor}`}
+              {!activeHostel
+                ? 'Hostel Selection'
+                : activeFloor === null
+                  ? `${activeHostel} Floors`
+                  : `${activeHostel} — Floor ${activeFloor}`}
             </span>
           </h2>
         </div>
@@ -514,7 +560,7 @@ const Rooms: React.FC = () => {
           {/* LEVEL 1: HOSTELS OVERVIEW */}
           {!activeHostel && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {['Hostel 1', 'Hostel 2'].map((name) => {
+              {displayHostels.map((name) => {
                 const { roomsCount, vacancies } = getHostelStats(name);
                 return (
                   <div
@@ -625,11 +671,10 @@ const Rooms: React.FC = () => {
                                 Room {room.roomNumber}
                               </h3>
                             </div>
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              isFull 
-                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/25' 
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isFull
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/25'
                                 : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
-                            }`}>
+                              }`}>
                               {isFull ? 'Full' : `${vacantCount} Vacant`}
                             </span>
                           </div>
@@ -647,11 +692,10 @@ const Rooms: React.FC = () => {
 
                           {/* Amenities Badges */}
                           <div className="flex flex-wrap gap-1.5 mt-4">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${
-                              room.ac 
-                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' 
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${room.ac
+                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
                                 : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                            }`}>
+                              }`}>
                               <Snowflake className="w-2.5 h-2.5" />
                               {room.ac ? 'A/C' : 'Non A/C'}
                             </span>
@@ -677,11 +721,10 @@ const Rooms: React.FC = () => {
                                 <div
                                   key={bed.id}
                                   title={`${bed.bedLabel}: ${bed.status}`}
-                                  className={`w-3.5 h-3.5 rounded-sm transition-colors cursor-pointer ${
-                                    bed.status === 'occupied' 
-                                      ? 'bg-rose-500 shadow-sm shadow-rose-500/30' 
+                                  className={`w-3.5 h-3.5 rounded-sm transition-colors cursor-pointer ${bed.status === 'occupied'
+                                      ? 'bg-rose-500 shadow-sm shadow-rose-500/30'
                                       : 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
-                                  }`}
+                                    }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     toggleBedStatus(bed);
@@ -755,8 +798,9 @@ const Rooms: React.FC = () => {
                   onChange={(e) => setHostel(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500"
                 >
-                  <option value="Hostel 1">Hostel 1</option>
-                  <option value="Hostel 2">Hostel 2</option>
+                  {displayHostels.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1051,27 +1095,24 @@ const Rooms: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Amenities</h4>
                   <div className="flex flex-wrap gap-2">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                      selectedRoom.ac 
-                        ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' 
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${selectedRoom.ac
+                        ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
                         : 'bg-slate-950/40 text-slate-500 border-slate-800/40'
-                    }`}>
+                      }`}>
                       <Snowflake className="w-3.5 h-3.5" />
                       {selectedRoom.ac ? 'Air Conditioned' : 'Non A/C'}
                     </span>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                      selectedRoom.attachedBathroom 
-                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' 
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${selectedRoom.attachedBathroom
+                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
                         : 'bg-slate-950/40 text-slate-500 border-slate-800/40'
-                    }`}>
+                      }`}>
                       <Bath className="w-3.5 h-3.5" />
                       {selectedRoom.attachedBathroom ? 'Attached Bathroom' : 'No Attached Bath'}
                     </span>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                      selectedRoom.balcony 
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border ${selectedRoom.balcony
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                         : 'bg-slate-950/40 text-slate-500 border-slate-800/40'
-                    }`}>
+                      }`}>
                       <Wind className="w-3.5 h-3.5" />
                       {selectedRoom.balcony ? 'Balcony' : 'No Balcony'}
                     </span>
@@ -1088,7 +1129,7 @@ const Rooms: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Visual Bed Layout Mapping</h4>
-                    
+
                     <div className="flex gap-3 text-[10px] font-semibold text-slate-400">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-xs bg-emerald-500" />
@@ -1110,11 +1151,10 @@ const Rooms: React.FC = () => {
                       return (
                         <div
                           key={bed.id}
-                          className={`relative flex flex-col justify-between p-4 rounded-xl border transition-all duration-300 ${
-                            isOccupied
+                          className={`relative flex flex-col justify-between p-4 rounded-xl border transition-all duration-300 ${isOccupied
                               ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50 shadow-md shadow-rose-950/10'
                               : 'bg-emerald-950/15 border-emerald-500/25 hover:border-emerald-500/40 shadow-md shadow-emerald-950/10'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 mr-2">
@@ -1133,18 +1173,17 @@ const Rooms: React.FC = () => {
                               ) : (
                                 <div className="flex items-center gap-1">
                                   <span className="text-xs font-semibold text-slate-200 truncate">{bed.bedLabel}</span>
-                                  <button 
-                                    onClick={() => startEditBedLabel(bed)} 
+                                  <button
+                                    onClick={() => startEditBedLabel(bed)}
                                     className="p-0.5 text-slate-500 hover:text-slate-300 transition-colors"
                                   >
                                     <Edit3 className="w-3 h-3" />
                                   </button>
                                 </div>
                               )}
-                              
-                              <span className={`text-[9px] font-bold uppercase tracking-wider block mt-1 ${
-                                isOccupied ? 'text-rose-400' : 'text-emerald-400'
-                              }`}>
+
+                              <span className={`text-[9px] font-bold uppercase tracking-wider block mt-1 ${isOccupied ? 'text-rose-400' : 'text-emerald-400'
+                                }`}>
                                 {bed.status}
                               </span>
                               {isOccupied && activeBooking?.expand?.resident && (
@@ -1154,9 +1193,8 @@ const Rooms: React.FC = () => {
                               )}
                             </div>
 
-                            <BedIcon className={`w-8 h-8 shrink-0 transition-transform hover:scale-105 ${
-                              isOccupied ? 'text-rose-400' : 'text-emerald-400'
-                            }`} />
+                            <BedIcon className={`w-8 h-8 shrink-0 transition-transform hover:scale-105 ${isOccupied ? 'text-rose-400' : 'text-emerald-400'
+                              }`} />
                           </div>
 
                           <div className="mt-4 flex items-center justify-between">
@@ -1274,22 +1312,20 @@ const Rooms: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsResidentType('new')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    isResidentType === 'new'
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${isResidentType === 'new'
                       ? 'bg-slate-850 text-slate-200'
                       : 'text-slate-500 hover:text-slate-300'
-                  }`}
+                    }`}
                 >
                   New Resident
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsResidentType('existing')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    isResidentType === 'existing'
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${isResidentType === 'existing'
                       ? 'bg-slate-850 text-slate-200'
                       : 'text-slate-500 hover:text-slate-300'
-                  }`}
+                    }`}
                 >
                   Existing Resident
                 </button>

@@ -1,3 +1,18 @@
+export interface Settings {
+  id: string;
+  hostelName: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  email: string;
+  rentDueDate: string;
+  lateFeeAmount: string;
+  whatsappApiKey: string;
+  whatsappPhoneNumberId?: string;
+  adminEmail: string;
+  created: string;
+}
+
 export interface Admin {
   id: string;
   email: string;
@@ -9,7 +24,7 @@ export interface Room {
   roomNumber: string;
   hostel: string;
   floor?: number | null;
-  roomType: string; // 'single' | 'double' | 'dorm'
+  roomType: string;
   capacity: number;
   monthlyRent: number;
   ac: boolean;
@@ -23,7 +38,7 @@ export interface Bed {
   id: string;
   room: string;
   bedLabel: string;
-  status: string; // 'vacant' | 'occupied'
+  status: string;
   created: string;
   bookings?: Booking[];
   expand?: any;
@@ -46,6 +61,10 @@ export interface Resident {
   localGuardianRelation?: string;
   occupation?: string;
   status: 'active' | 'checked_out';
+  // Feature 3: Item tracking
+  hasAlmirahKey?: boolean;
+  hasPunchcard?: boolean;
+  hasRoomKey?: boolean;
   created: string;
   expand?: any;
 }
@@ -66,10 +85,13 @@ export interface Payment {
   resident: string;
   booking: string;
   monthFor: string;
-  amount: number;
+  rentAmount: number;
+  electricityAmount: number;
+  foodAmount: number;
+  fineAmount: number;
+  amount: number; // This acts as totalAmount
   dueDate: string;
   paidDate?: string;
-  paymentType?: 'rent' | 'electricity' | 'food' | 'other';
   status: 'paid' | 'pending' | 'overdue';
   created: string;
   expand?: any;
@@ -79,9 +101,17 @@ export interface ElectricityBill {
   id: string;
   room: string;
   billingMonth: string;
-  previousReading?: number;
-  currentReading?: number;
-  ratePerUnit?: number;
+  previousReading?: number; // legacy
+  currentReading?: number;  // legacy
+  ratePerUnit?: number;     // legacy
+  meters?: Array<{
+    name: string;
+    previousReading: number;
+    currentReading: number;
+    ratePerUnit: number;
+    amount: number;
+    isFirstTime?: boolean;
+  }>;
   totalAmount: number;
   dueDate: string;
   status: 'draft' | 'split_and_billed';
@@ -108,7 +138,7 @@ export interface MaintenanceRequest {
   id: string;
   roomId: string;
   description: string;
-  status: string; // 'open' | 'in_progress' | 'resolved'
+  status: string;
   reportedDate: string;
   resolvedDate?: string | null;
   createdAt: string;
@@ -118,8 +148,75 @@ export interface EntryLog {
   id: string;
   resident: string;
   timestamp: string;
-  type: string; // 'Entry' | 'Exit'
-  method: string; // 'Face' | 'Fingerprint' | 'Card' | 'Manual'
+  type: string;
+  method: string;
+  created: string;
+  expand?: any;
+}
+
+// ── Feature 1 — Payment Reminders ──────────────────────────────
+export interface Notification {
+  id: string;
+  resident: string;
+  payment: string;
+  message: string;
+  sentAt: string;
+  channel: 'whatsapp' | 'sms';
+  status: 'sent' | 'failed';
+  created: string;
+  expand?: any;
+}
+
+// ── Feature 2 — Leave Notices ───────────────────────────────────
+export interface LeaveNotice {
+  id: string;
+  resident: string;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote?: string;
+  created: string;
+  expand?: any;
+}
+
+// ── Feature 4 — Home Going Notices ─────────────────────────────
+export interface HomeNotice {
+  id: string;
+  resident: string;
+  departureDate: string;
+  returnDate: string;
+  destination: string;
+  contactDuringLeave?: string;
+  status: 'active' | 'returned';
+  created: string;
+  expand?: any;
+}
+
+// ── Feature 5 — Fines ──────────────────────────────────────────
+export interface Fine {
+  id: string;
+  resident: string;
+  amount: number;
+  reason: string;
+  category: 'noise' | 'damage' | 'late_return' | 'rule_violation' | 'other';
+  fineDate: string;
+  status: 'pending' | 'paid' | 'waived';
+  created: string;
+  expand?: any;
+}
+
+// ── Feature 5 — Caution Deposits ───────────────────────────────
+export interface CautionDeposit {
+  id: string;
+  resident: string;
+  amount: number;
+  depositDate: string;
+  status: 'held' | 'refunded' | 'forfeited';
+  refundAmount?: number;
+  refundDate?: string;
+  deductedFines?: number;
+  notes?: string;
   created: string;
   expand?: any;
 }

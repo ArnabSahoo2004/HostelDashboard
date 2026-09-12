@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import pb from '../../api/client';
 import { 
   LayoutDashboard, 
   Users, 
@@ -9,7 +10,9 @@ import {
   LogOut, 
   Wrench,
   MessageSquare,
-  Utensils
+  Utensils,
+  FileText,
+  Gavel
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -17,14 +20,24 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
+  const [hostelName, setHostelName] = useState('Hostel Admin');
+
+  useEffect(() => {
+    pb.collection('settings').getFirstListItem('')
+      .then((record) => {
+        if (record.hostelName) setHostelName(record.hostelName);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
+
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Rooms & Beds', path: '/rooms', icon: BedDouble },
     { name: 'Residents', path: '/residents', icon: Users },
-
     { name: 'Payments', path: '/payments', icon: CreditCard },
+    { name: 'Notices', path: '/notices', icon: FileText },
+    { name: 'Fines & Deposits', path: '/fines', icon: Gavel },
     { name: 'Maintenance', path: '/maintenance', icon: Wrench },
-    { name: 'Kitchen', path: '/kitchen', icon: Utensils },
     { name: 'WhatsApp', path: '/whatsapp', icon: MessageSquare },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
@@ -36,10 +49,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
         <div className="h-16 flex items-center px-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary-600 to-sky-400 flex items-center justify-center shadow-lg shadow-primary-500/20">
-              <span className="text-white font-bold text-lg">H</span>
+              <span className="text-white font-bold text-lg">{hostelName.charAt(0).toUpperCase()}</span>
             </div>
-            <span className="font-semibold text-lg bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-              Hostel Admin
+            <span className="font-semibold text-base leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent line-clamp-2" title={hostelName}>
+              {hostelName}
             </span>
           </div>
         </div>

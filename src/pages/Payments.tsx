@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import pb from '../api/client';
-import type { Payment } from '../types';
+import type { Payment, Settings } from '../types';
 import { generateHTMLInvoicePDF } from '../utils/generateInvoice';
 import { 
   Search, 
@@ -13,15 +13,18 @@ import {
   FileDown,
   X,
   MessageSquare,
-  CheckCircle
+  CheckCircle,
+  Bell
 } from 'lucide-react';
 import ReceiptTemplate from '../components/shared/ReceiptTemplate';
 import ElectricityTab from '../components/payments/ElectricityTab';
-import FoodBillsTab from '../components/payments/FoodBillsTab';
+import ResidentStatementTab from '../components/payments/ResidentStatementTab';
+import NotificationsTab from '../components/payments/NotificationsTab';
 
 const Payments: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dues' | 'electricity' | 'food'>('dues');
+  const [activeTab, setActiveTab] = useState<'dues' | 'electricity' | 'statement' | 'notifications'>('dues');
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +65,7 @@ const Payments: React.FC = () => {
 
   useEffect(() => {
     fetchPayments();
+    pb.collection('settings').getFirstListItem('').then(s => setSettings(s as any)).catch(()=>{});
   }, []);
 
   useEffect(() => {
@@ -104,12 +108,15 @@ const Payments: React.FC = () => {
     const dummyPayment = {
       id: 'dummy',
       monthFor: '2026-07-01',
+      rentAmount: 3000,
+      electricityAmount: 500,
+      fineAmount: 0,
       amount: 4500,
       dueDate: '2026-07-05',
       paidDate: new Date().toISOString(),
       status: 'paid',
       expand: {
-        resident: { fullName: 'Jane Doe' },
+        resident: { fullName: 'Jane Doe', phone: '9000000000' },
         booking: { expand: { bed: { bedLabel: 'A', room: { roomNumber: '101', hostel: 'Satabdi' } } } }
       }
     } as any;
@@ -144,6 +151,9 @@ const Payments: React.FC = () => {
                 resident: booking.resident,
                 booking: booking.id,
                 monthFor: monthStart,
+                rentAmount: room.monthlyRent,
+                electricityAmount: 0,
+                fineAmount: 0,
                 amount: room.monthlyRent,
                 dueDate: `${year}-${month}-05 12:00:00.000Z`,
                 status: 'pending'
@@ -166,7 +176,7 @@ const Payments: React.FC = () => {
     }
   };
 
-  // KPI Calculations
+  // KPI Calculations — count ALL payment types (rent + electricity + food)
   const totalExpected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const totalCollected = payments
     .filter(p => p.status === 'paid')
@@ -238,13 +248,13 @@ const Payments: React.FC = () => {
           <div className="absolute right-4 top-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-2.5 rounded-xl">
             <CheckCircle className="w-5 h-5" />
           </div>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Total Rent Collected</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Total Collected</span>
           <h3 className="text-2xl font-black text-slate-100 mt-2 flex items-baseline gap-0.5">
             <span className="text-lg font-bold text-emerald-400">₹</span>
             {totalCollected.toLocaleString('en-IN')}
           </h3>
           <div className="text-[11px] text-slate-500 mt-2 block">
-            Expected gross: ₹{totalExpected.toLocaleString('en-IN')}
+            Expected total: ₹{totalExpected.toLocaleString('en-IN')}
           </div>
         </div>
 
@@ -302,14 +312,25 @@ const Payments: React.FC = () => {
           Room Utility Bills
         </button>
         <button
-          onClick={() => setActiveTab('food')}
+          onClick={() => setActiveTab('statement')}
           className={`py-3 px-6 text-sm font-bold border-b-2 transition-colors ${
-            activeTab === 'food' 
-              ? 'border-emerald-500 text-emerald-400' 
+            activeTab === 'statement' 
+              ? 'border-primary-400 text-primary-300' 
               : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-700'
           }`}
         >
-          Food & Mess Bills
+          Resident Statement
+        </button>
+        <button
+          onClick={() => setActiveTab('notifications')}
+          className={`py-3 px-6 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'notifications' 
+              ? 'border-amber-400 text-amber-300' 
+              : 'border-transparent text-slate-400 hover:text-slate-300 hover:border-slate-700'
+          }`}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          Reminders
         </button>
       </div>
 
@@ -380,8 +401,6 @@ const Payments: React.FC = () => {
               <tbody className="divide-y divide-slate-850">
                 {filteredPayments.map((pay) => {
                   const bookingBed = pay.expand?.booking?.expand?.bed;
-                  const isElectricity = pay.paymentType === 'electricity';
-                  const isFood = pay.paymentType === 'food';
                   return (
                     <tr key={pay.id} className="hover:bg-slate-850/40 transition-colors">
                       <td className="p-4 font-bold text-slate-200">
@@ -393,7 +412,7 @@ const Payments: React.FC = () => {
                       <td className="p-4 text-xs text-slate-400">
                         {bookingBed ? (
                           <span>
-                            {bookingBed.room.hostel} • Room {bookingBed.room.roomNumber} ({bookingBed.bedLabel})
+                            {bookingBed.expand?.room?.hostel ?? ''} • Room {bookingBed.expand?.room?.roomNumber ?? bookingBed.room} ({bookingBed.bedLabel})
                           </span>
                         ) : (
                           <span className="italic text-slate-600">No active assignment</span>
@@ -403,12 +422,10 @@ const Payments: React.FC = () => {
                         <div className="text-sm font-bold text-slate-200">
                           ₹{Number(pay.amount).toLocaleString('en-IN')}
                         </div>
-                        <div className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                           isElectricity ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 
-                           isFood ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
-                           'bg-primary-500/10 text-primary-400 border border-primary-500/20'
-                        }`}>
-                          {isElectricity ? 'Electricity' : isFood ? 'Food & Mess' : 'Rent'}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(pay.rentAmount > 0) && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary-500/10 text-primary-400 border border-primary-500/20">Rent</span>}
+                          {(pay.electricityAmount > 0) && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">Elec</span>}
+                          {(pay.fineAmount > 0) && <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-500 border border-rose-500/20">Fine</span>}
                         </div>
                       </td>
                       <td className="p-4 text-xs text-slate-450">
@@ -485,8 +502,10 @@ const Payments: React.FC = () => {
       </>
       ) : activeTab === 'electricity' ? (
         <ElectricityTab />
+      ) : activeTab === 'notifications' ? (
+        <NotificationsTab />
       ) : (
-        <FoodBillsTab />
+        <ResidentStatementTab onPaymentsChanged={fetchPayments} />
       )}
 
       {/* Generate Invoices Modal */}
@@ -618,6 +637,7 @@ const Payments: React.FC = () => {
             payment={selectedReceipt.payment}
             allPayments={payments}
             receiptNumber={selectedReceipt.receiptNo}
+            settings={settings}
           />
         )}
       </div>

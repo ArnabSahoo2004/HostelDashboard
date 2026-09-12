@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import type { Resident, Room, Booking } from '../types';
 import pb from '../api/client';
-import { 
-  Users, 
-  UserPlus, 
-  Search, 
-  Phone, 
-  Mail, 
-  ShieldAlert, 
-  Edit3, 
-  Trash2, 
-  UserCheck, 
-  UserX, 
-  Calendar, 
-  MapPin, 
+import {
+  Users,
+  UserPlus,
+  Search,
+  Phone,
+  Mail,
+  ShieldAlert,
+  Edit3,
+  Trash2,
+  UserCheck,
+  UserX,
+  Calendar,
+  MapPin,
   X,
   AlertTriangle
 } from 'lucide-react';
@@ -46,7 +46,7 @@ const Residents: React.FC = () => {
   const [idProofNumber, setIdProofNumber] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-  
+
   // New Form Fields
   const [fatherName, setFatherName] = useState('');
   const [fatherPhone, setFatherPhone] = useState('');
@@ -56,6 +56,10 @@ const Residents: React.FC = () => {
   const [localGuardianPhone, setLocalGuardianPhone] = useState('');
   const [localGuardianRelation, setLocalGuardianRelation] = useState('');
   const [occupation, setOccupation] = useState('');
+  // Feature 3: Item tracking
+  const [hasAlmirahKey, setHasAlmirahKey] = useState(false);
+  const [hasPunchcard, setHasPunchcard] = useState(false);
+  const [hasRoomKey, setHasRoomKey] = useState(false);
 
   // Form Fields: Check-in
   const [selectedHostel, setSelectedHostel] = useState('Hostel 1');
@@ -101,10 +105,10 @@ const Residents: React.FC = () => {
         attachedBathroom: r.attachedBathroom,
         balcony: r.balcony,
         beds: r.expand?.beds_via_room?.map((b: any) => ({
-            id: b.id,
-            roomId: b.room,
-            bedLabel: b.bedLabel,
-            status: b.status
+          id: b.id,
+          roomId: b.room,
+          bedLabel: b.bedLabel,
+          status: b.status
         })) || []
       }));
       setRooms(mappedRooms as any);
@@ -134,6 +138,9 @@ const Residents: React.FC = () => {
     setLocalGuardianPhone('');
     setLocalGuardianRelation('');
     setOccupation('');
+    setHasAlmirahKey(false);
+    setHasPunchcard(false);
+    setHasRoomKey(false);
     setModalError(null);
     setIsAddOpen(true);
   };
@@ -154,6 +161,9 @@ const Residents: React.FC = () => {
     setLocalGuardianPhone(res.localGuardianPhone || '');
     setLocalGuardianRelation(res.localGuardianRelation || '');
     setOccupation(res.occupation || '');
+    setHasAlmirahKey(res.hasAlmirahKey || false);
+    setHasPunchcard(res.hasPunchcard || false);
+    setHasRoomKey(res.hasRoomKey || false);
     setModalError(null);
     setIsEditOpen(true);
   };
@@ -213,6 +223,9 @@ const Residents: React.FC = () => {
         localGuardianPhone,
         localGuardianRelation,
         occupation,
+        hasAlmirahKey,
+        hasPunchcard,
+        hasRoomKey,
         status: 'active'
       });
       setIsAddOpen(false);
@@ -245,7 +258,10 @@ const Residents: React.FC = () => {
         localGuardianName,
         localGuardianPhone,
         localGuardianRelation,
-        occupation
+        occupation,
+        hasAlmirahKey,
+        hasPunchcard,
+        hasRoomKey,
       });
       setIsEditOpen(false);
       fetchResidents();
@@ -295,7 +311,7 @@ const Residents: React.FC = () => {
       await pb.collection('bookings').update(selectedBooking.id, {
         checkOutDate: checkOutDate + ' 12:00:00.000Z',
       });
-      
+
       await pb.collection('beds').update(selectedBooking.bed, { status: 'vacant' });
       await pb.collection('residents').update(selectedResident!.id, { status: 'checked_out' });
 
@@ -335,26 +351,26 @@ const Residents: React.FC = () => {
   ).sort((a, b) => a - b);
 
   const availableRooms = rooms.filter(
-    r => r.hostel === selectedHostel && 
-         (selectedFloor === '' || 
-          r.floor?.toString() === selectedFloor || 
-          (selectedFloor === '0' && r.floor === null))
+    r => r.hostel === selectedHostel &&
+      (selectedFloor === '' ||
+        r.floor?.toString() === selectedFloor ||
+        (selectedFloor === '0' && r.floor === null))
   );
 
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
-  const availableBeds = selectedRoom 
+  const availableBeds = selectedRoom
     ? selectedRoom.beds.filter(b => b.status === 'vacant')
     : [];
 
   // Filtered residents list
   const filteredResidents = residents.filter(res => {
-    const matchesSearch = 
+    const matchesSearch =
       res.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (res.phone && res.phone.includes(searchTerm)) ||
       (res.email && res.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = 
-      statusFilter === 'all' || 
+    const matchesStatus =
+      statusFilter === 'all' ||
       res.status === statusFilter;
 
     return matchesSearch && matchesStatus;
@@ -435,11 +451,10 @@ const Residents: React.FC = () => {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`py-2 px-4 rounded-xl text-xs font-semibold border transition-all ${
-                statusFilter === status
+              className={`py-2 px-4 rounded-xl text-xs font-semibold border transition-all ${statusFilter === status
                   ? 'bg-slate-800 text-slate-200 border-slate-700'
                   : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/40 hover:text-slate-300'
-              }`}
+                }`}
             >
               {status === 'all' && 'All Status'}
               {status === 'active' && 'Active'}
@@ -519,7 +534,7 @@ const Residents: React.FC = () => {
                           <div>
                             <div className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
                               <MapPin className="w-3.5 h-3.5 text-primary-400" />
-                              {activeBed.room.hostel} • Room {activeBed.room.roomNumber}
+                              {activeBed.expand?.room?.hostel} • Room {activeBed.expand?.room?.roomNumber}
                             </div>
                             <div className="text-[11px] text-slate-500 mt-0.5">
                               {activeBed.bedLabel} • Checked-in {new Date(activeBooking.checkInDate).toLocaleDateString()}
@@ -547,11 +562,10 @@ const Residents: React.FC = () => {
                       </td>
 
                       <td className="p-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          !!activeBooking
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${!!activeBooking
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                             : 'bg-slate-800 text-slate-400 border border-slate-700/60'
-                        }`}>
+                          }`}>
                           {!!activeBooking ? 'Active' : 'Checked Out'}
                         </span>
                       </td>
@@ -747,6 +761,25 @@ const Residents: React.FC = () => {
                 </div>
               </div>
 
+              {/* Items Issued Checklist */}
+              <div className="border-t border-slate-800 pt-4 mt-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Items Issued to Resident</span>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: '🔑 Almirah Key', state: hasAlmirahKey, setter: setHasAlmirahKey },
+                    { label: '🪪 Punchcard', state: hasPunchcard, setter: setHasPunchcard },
+                    { label: '🚪 Room Key', state: hasRoomKey, setter: setHasRoomKey },
+                  ].map(({ label, state, setter }) => (
+                    <label key={label} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                      state ? 'bg-primary-500/10 border-primary-500/30 text-primary-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}>
+                      <input type="checkbox" checked={state} onChange={e => setter(e.target.checked)} className="accent-primary-500 w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs font-semibold">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={modalLoading}
@@ -900,7 +933,23 @@ const Residents: React.FC = () => {
                 </div>
               </div>
 
-              <button
+                            {/* Items Issued Checklist */}
+              <div className="border-t border-slate-800 pt-4 mt-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Items Issued to Resident</span>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'AlmirahKey', state: hasAlmirahKey, setter: setHasAlmirahKey },
+                    { label: 'Punchcard', state: hasPunchcard, setter: setHasPunchcard },
+                    { label: 'RoomKey', state: hasRoomKey, setter: setHasRoomKey },
+                  ].map(({ label, state, setter }) => (
+                    <label key={label} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${state ? 'bg-primary-500/10 border-primary-500/30 text-primary-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'}`}>
+                      <input type="checkbox" checked={state} onChange={e => setter(e.target.checked)} className="accent-primary-500 w-4 h-4 flex-shrink-0" />
+                      <span className="text-xs font-semibold">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+<button
                 type="submit"
                 disabled={modalLoading}
                 className="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl text-sm transition-all mt-6 shadow-lg flex items-center justify-center gap-2"
