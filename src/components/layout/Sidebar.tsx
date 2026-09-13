@@ -10,7 +10,6 @@ import {
   LogOut, 
   Wrench,
   MessageSquare,
-  Utensils,
   FileText,
   Gavel
 } from 'lucide-react';

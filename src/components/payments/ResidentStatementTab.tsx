@@ -8,7 +8,6 @@ import {
   IndianRupee,
   BedDouble,
   Zap,
-  Utensils,
   CheckCircle,
   FileDown,
   Calendar,
