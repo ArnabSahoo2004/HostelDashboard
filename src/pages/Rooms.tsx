@@ -145,7 +145,7 @@ const Rooms: React.FC = () => {
   }, [rooms, selectedRoom]);
 
   const openAddModal = () => {
-    setHostel(activeHostel || displayHostels[0] || 'Hostel 1');
+    setHostel(activeHostel ? activeHostel : '__NEW__');
     setRoomNumber('');
     setFloor(activeFloor !== null ? activeFloor.toString() : '');
     setRoomType('2 sharing');
