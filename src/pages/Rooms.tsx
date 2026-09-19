@@ -567,7 +567,7 @@ const Rooms: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-primary-500/20 hover:shadow-primary-500/35 transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Room</span>
+            <span>{!activeHostel ? 'Add Hostel' : 'Add Room'}</span>
           </button>
         </div>
       </div>
@@ -811,14 +811,14 @@ const Rooms: React.FC = () => {
         </>
       )}
 
-      {/* ADD ROOM MODAL */}
+      {/* ADD ROOM / HOSTEL MODAL */}
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-950/80 backdrop-blur-sm">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
               <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                 <Plus className="text-primary-500 w-5 h-5" />
-                <span>Add New Room</span>
+                <span>{!activeHostel ? 'Add Hostel & First Room' : 'Add New Room'}</span>
               </h3>
               <button onClick={() => setIsAddOpen(false)} className="p-1 text-slate-400 hover:text-slate-200">
                 <X className="w-5 h-5" />
