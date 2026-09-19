@@ -57,6 +57,7 @@ const Rooms: React.FC = () => {
 
   // Form Fields
   const [hostel, setHostel] = useState('Hostel 1');
+  const [newHostelInput, setNewHostelInput] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [floor, setFloor] = useState('');
   
@@ -146,6 +147,7 @@ const Rooms: React.FC = () => {
 
   const openAddModal = () => {
     setHostel(activeHostel ? activeHostel : '__NEW__');
+    setNewHostelInput('');
     setRoomNumber('');
     setFloor(activeFloor !== null ? activeFloor.toString() : '');
     setRoomType('2 sharing');
@@ -192,9 +194,16 @@ const Rooms: React.FC = () => {
     }
 
     try {
+      const finalHostelName = hostel === '__NEW__' ? newHostelInput.trim() : hostel;
+      if (!finalHostelName) {
+        setFormError('Please provide a hostel name.');
+        setFormLoading(false);
+        return;
+      }
+
       const room = await pb.collection('rooms').create({
         roomNumber,
-        hostel,
+        hostel: finalHostelName,
         floor: floor ? parseInt(floor, 10) : null,
         roomType,
         capacity: parseInt(capacity, 10),
@@ -834,24 +843,27 @@ const Rooms: React.FC = () => {
 
             <form onSubmit={handleAddRoom} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-400 block">Hostel *</label>
-                <select
-                  value={hostel}
-                  onChange={(e) => setHostel(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500"
-                >
-                  {displayHostels.map(h => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                  {/* Option to create a completely new hostel by typing a new name */}
-                  <option value="__NEW__">+ Add New Hostel</option>
-                </select>
-                {hostel === '__NEW__' && (
+                <label className="text-xs font-semibold text-slate-400 block">Hostel Name *</label>
+                {activeHostel && (
+                  <select
+                    value={hostel}
+                    onChange={(e) => setHostel(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500"
+                  >
+                    {displayHostels.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                    <option value="__NEW__">+ Add New Hostel</option>
+                  </select>
+                )}
+                
+                {(!activeHostel || hostel === '__NEW__') && (
                   <input
                     type="text"
-                    placeholder="Enter new hostel name"
-                    onChange={(e) => setHostel(e.target.value)}
-                    className="w-full mt-2 bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500"
+                    placeholder={activeHostel ? "Enter new hostel name" : "e.g. Boys Hostel A"}
+                    value={newHostelInput}
+                    onChange={(e) => setNewHostelInput(e.target.value)}
+                    className={`w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500 ${activeHostel ? 'mt-2' : ''}`}
                     autoFocus
                   />
                 )}
