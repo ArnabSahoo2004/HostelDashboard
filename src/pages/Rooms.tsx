@@ -59,6 +59,12 @@ const Rooms: React.FC = () => {
   const [hostel, setHostel] = useState('Hostel 1');
   const [roomNumber, setRoomNumber] = useState('');
   const [floor, setFloor] = useState('');
+  
+  // Hostel Rename State
+  const [isRenameHostelOpen, setIsRenameHostelOpen] = useState(false);
+  const [hostelToRename, setHostelToRename] = useState<string>('');
+  const [newHostelName, setNewHostelName] = useState<string>('');
+  const [renameLoading, setRenameLoading] = useState(false);
   const [roomType, setRoomType] = useState('2 sharing');
   const [capacity, setCapacity] = useState('2');
   const [monthlyRent, setMonthlyRent] = useState('');
@@ -421,6 +427,28 @@ const Rooms: React.FC = () => {
     }
   };
 
+  const handleRenameHostel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHostelName.trim() || newHostelName.trim() === hostelToRename) {
+      setIsRenameHostelOpen(false);
+      return;
+    }
+    
+    setRenameLoading(true);
+    try {
+      const roomsToUpdate = rooms.filter(r => r.hostel === hostelToRename);
+      for (const room of roomsToUpdate) {
+        await pb.collection('rooms').update(room.id, { hostel: newHostelName.trim() });
+      }
+      setIsRenameHostelOpen(false);
+      fetchRooms();
+    } catch (err: any) {
+      alert(err.message || 'Failed to rename hostel.');
+    } finally {
+      setRenameLoading(false);
+    }
+  };
+
   // Helper Vacancy Calculators
   const getHostelStats = (hostelName: string) => {
     const hostelRooms = rooms.filter(r => r.hostel === hostelName);
@@ -575,9 +603,23 @@ const Rooms: React.FC = () => {
                     </div>
 
                     <div className="space-y-1">
-                      <h3 className="text-2xl font-bold text-slate-100 group-hover:text-primary-400 transition-colors">
-                        {name}
-                      </h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-2xl font-bold text-slate-100 group-hover:text-primary-400 transition-colors">
+                          {name}
+                        </h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHostelToRename(name);
+                            setNewHostelName(name);
+                            setIsRenameHostelOpen(true);
+                          }}
+                          className="p-1.5 ml-2 text-slate-500 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-all"
+                          title="Rename Hostel"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
                       <div className="flex items-center gap-4 text-xs font-semibold text-slate-400 mt-2">
                         <span>{roomsCount} Rooms</span>
                         <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
@@ -801,7 +843,18 @@ const Rooms: React.FC = () => {
                   {displayHostels.map(h => (
                     <option key={h} value={h}>{h}</option>
                   ))}
+                  {/* Option to create a completely new hostel by typing a new name */}
+                  <option value="__NEW__">+ Add New Hostel</option>
                 </select>
+                {hostel === '__NEW__' && (
+                  <input
+                    type="text"
+                    placeholder="Enter new hostel name"
+                    onChange={(e) => setHostel(e.target.value)}
+                    className="w-full mt-2 bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-sm text-slate-200 focus:outline-none focus:border-primary-500"
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
