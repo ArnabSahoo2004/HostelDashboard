@@ -56,10 +56,23 @@ export default function WhatsApp() {
 
         const payload = {
           messaging_product: "whatsapp",
-          recipient_type: "individual",
           to: cleanPhone,
-          type: "text",
-          text: { preview_url: false, body: broadcastMessage }
+          type: "template",
+          template: {
+            name: "hostel_broadcast_notice",
+            language: { code: "en_US" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: broadcastMessage
+                  }
+                ]
+              }
+            ]
+          }
         };
 
         const res = await fetch(`https://graph.facebook.com/v20.0/${phoneId}/messages`, {
