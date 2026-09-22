@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Settings, Wifi, WifiOff, Send, MessageSquare, ShieldAlert } from 'lucide-react';
 import pb from '../api/client';
-import type { Settings as SettingsType } from '../types';
+
 
 export default function WhatsApp() {
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -122,7 +122,7 @@ export default function WhatsApp() {
               <p className="text-sm text-slate-400 mb-6">
                 Your dashboard is securely connected to the official Meta WhatsApp Cloud API.
               </p>
-              
+
               <div className="bg-slate-800/50 rounded-xl p-4 text-left border border-slate-700">
                 <div className="flex items-center gap-2 text-amber-400 mb-2">
                   <ShieldAlert className="w-4 h-4" />
@@ -192,11 +192,10 @@ export default function WhatsApp() {
             </div>
 
             {alert && (
-              <div className={`p-4 rounded-xl text-sm border ${
-                alert.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                alert.type === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
-                'bg-rose-500/10 text-rose-400 border-rose-500/20'
-              }`}>
+              <div className={`p-4 rounded-xl text-sm border ${alert.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                  alert.type === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                    'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`}>
                 {alert.msg}
               </div>
             )}
