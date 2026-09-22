@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Settings, Wifi, WifiOff, Send, MessageSquare, ShieldAlert } from 'lucide-react';
 import pb from '../api/client';
 import type { Settings as SettingsType } from '../types';
 
 export default function WhatsApp() {
-  const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [loading, setLoading] = useState(true);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning'; msg: string } | null>(null);
@@ -16,23 +14,6 @@ export default function WhatsApp() {
     "Alert: General maintenance work is scheduled for the common areas today. Sorry for the inconvenience.",
     "Notice: The main gate will be closed at 10 PM tonight. Please return on time."
   ];
-
-  const fetchSettings = async () => {
-    try {
-      const records = await pb.collection('settings').getFullList();
-      if (records.length > 0) {
-        setSettings(records[0] as unknown as SettingsType);
-      }
-    } catch (err) {
-      console.error('Failed to fetch settings', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   const isConnected = !!(import.meta.env.VITE_META_TOKEN && import.meta.env.VITE_WHATSAPP_PHONE_ID);
 
@@ -113,10 +94,6 @@ export default function WhatsApp() {
       setSending(false);
     }
   };
-
-  if (loading) {
-    return <div className="p-6">Loading WhatsApp Configuration...</div>;
-  }
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6 animate-fade-in">
