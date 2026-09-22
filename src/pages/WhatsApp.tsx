@@ -34,12 +34,18 @@ export default function WhatsApp() {
     fetchSettings();
   }, []);
 
-  const isConnected = !!(settings?.whatsappApiKey && settings?.whatsappPhoneNumberId);
+  const isConnected = !!(import.meta.env.VITE_META_TOKEN && import.meta.env.VITE_WHATSAPP_PHONE_ID);
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
+    const token = import.meta.env.VITE_META_TOKEN;
+    const phoneId = import.meta.env.VITE_WHATSAPP_PHONE_ID;
+
+    if (!token || !phoneId) {
+      setAlert({ type: 'error', msg: 'WhatsApp API credentials are missing in the .env file.' });
+      return;
+    }
     if (!broadcastMessage.trim()) return;
-    if (!settings?.whatsappApiKey || !settings?.whatsappPhoneNumberId) return;
 
     setSending(true);
     setAlert(null);
@@ -75,10 +81,10 @@ export default function WhatsApp() {
           text: { preview_url: false, body: broadcastMessage }
         };
 
-        const res = await fetch(`https://graph.facebook.com/v20.0/${settings.whatsappPhoneNumberId}/messages`, {
+        const res = await fetch(`https://graph.facebook.com/v20.0/${phoneId}/messages`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${settings.whatsappApiKey}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(payload)
