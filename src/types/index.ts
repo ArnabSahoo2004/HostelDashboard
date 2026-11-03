@@ -64,8 +64,6 @@ export interface Resident {
   // Feature 3: Item tracking
   hasAlmirahKey?: boolean;
   hasPunchcard?: boolean;
-  hasAlmirahKey?: boolean;
-  hasPunchcard?: boolean;
   hasRoomKey?: boolean;
   // Agreement Management
   agreementFile?: string;
