@@ -20,6 +20,7 @@ import ReceiptTemplate from '../components/shared/ReceiptTemplate';
 import ElectricityTab from '../components/payments/ElectricityTab';
 import ResidentStatementTab from '../components/payments/ResidentStatementTab';
 import NotificationsTab from '../components/payments/NotificationsTab';
+import { sendWhatsAppMessage } from '../services/whatsapp';
 
 const Payments: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dues' | 'electricity' | 'statement' | 'notifications'>('dues');
@@ -459,17 +460,10 @@ const Payments: React.FC = () => {
                                   alert('Resident has no phone number registered.');
                                   return;
                                 }
-                                const res = await fetch('http://localhost:5000/api/whatsapp/send-reminder', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    phone: residentPhone,
-                                    message: `Hi ${pay.expand?.resident?.fullName}, this is a gentle reminder that your hostel rent of ₹${pay.amount} for the month of ${formatMonth(pay.monthFor)} is due. Please clear your dues at the earliest. Ignore if already paid.`
-                                  })
-                                });
-                                const data = await res.json();
-                                if (res.ok) alert('WhatsApp reminder sent successfully!');
-                                else alert('Failed to send reminder: ' + data.error);
+                                const reminderText = `Gentle reminder for ${pay.expand?.resident?.fullName || 'Resident'}: Your hostel dues of ₹${pay.amount} for ${formatMonth(pay.monthFor)} are due. Please clear at your earliest.`;
+                                const res = await sendWhatsAppMessage(residentPhone, reminderText);
+                                if (res.success) alert('WhatsApp reminder sent successfully via Meta Cloud API!');
+                                else alert('Failed to send reminder: ' + res.error);
                               } catch(e) {
                                 alert('An error occurred.');
                               }

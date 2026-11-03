@@ -5,15 +5,14 @@ import {
   Bell, Send, CheckCircle, AlertTriangle, RefreshCw,
   MessageSquare, Clock
 } from 'lucide-react';
-
-const WA_BASE = 'http://localhost:5000';
+import { checkWhatsAppConnection, sendWhatsAppMessage } from '../../services/whatsapp';
 
 function buildReminderMessage(resident: Resident, payments: Payment[]): string {
   const total = payments.reduce((s, p) => s + Number(p.amount), 0);
   const month = payments[0]?.monthFor
     ? new Date(payments[0].monthFor).toLocaleDateString('default', { month: 'long', year: 'numeric' })
     : 'this month';
-  return `Dear ${resident.fullName},\n\nThis is a gentle reminder from Satabdi Girls' Hostel that your payment of ₹${total.toLocaleString('en-IN')} for ${month} is due.\n\nPlease make the payment at the earliest to avoid late fees.\n\nThank you,\nHostel Management`;
+  return `Gentle reminder for ${resident.fullName || 'Resident'}: Your payment of ₹${total.toLocaleString('en-IN')} for ${month} is due. Please clear at your earliest.`;
 }
 
 export default function NotificationsTab() {
@@ -48,14 +47,6 @@ export default function NotificationsTab() {
     return acc;
   }, {});
 
-  const checkWaConnected = async (): Promise<boolean> => {
-    try {
-      const res = await fetch(`${WA_BASE}/api/whatsapp/status`);
-      const data = await res.json();
-      return data.connected === true;
-    } catch { return false; }
-  };
-
   const sendReminder = async (residentId: string) => {
     const resident = pendingPayments.find(p => (p.expand?.resident?.id || p.resident) === residentId)?.expand?.resident;
     if (!resident?.phone) {
@@ -64,15 +55,18 @@ export default function NotificationsTab() {
     setSending(s => ({ ...s, [residentId]: true }));
     setError(null);
     try {
-      const connected = await checkWaConnected();
-      if (!connected) throw new Error('WhatsApp is not connected. Go to the WhatsApp page to connect.');
+      const conn = await checkWhatsAppConnection();
+      if (!conn.connected) {
+        throw new Error(conn.error || 'WhatsApp is not connected. Configure in WhatsApp page or Settings.');
+      }
+
       const message = buildReminderMessage(resident, byResident[residentId]);
-      const res = await fetch(`${WA_BASE}/api/whatsapp/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phones: [resident.phone], message }),
-      });
-      if (!res.ok) throw new Error('Failed to send message.');
+      const res = await sendWhatsAppMessage(resident.phone, message);
+
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to send WhatsApp message');
+      }
+
       // Log notification
       await pb.collection('notifications').create({
         resident: resident.id,
@@ -82,38 +76,55 @@ export default function NotificationsTab() {
         channel: 'whatsapp',
         status: 'sent',
       }).catch(() => {}); // best-effort log
+
       setSent(s => ({ ...s, [residentId]: true }));
-    } catch (err: any) { setError(err.message || 'Failed to send reminder.'); }
-    finally { setSending(s => ({ ...s, [residentId]: false })); }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reminder.');
+    } finally {
+      setSending(s => ({ ...s, [residentId]: false }));
+    }
   };
 
   const sendAll = async () => {
     setBulkSending(true); setBulkResult(null); setError(null);
-    const connected = await checkWaConnected();
-    if (!connected) { setError('WhatsApp is not connected.'); setBulkSending(false); return; }
+    const conn = await checkWhatsAppConnection();
+    if (!conn.connected) {
+      setError(conn.error || 'WhatsApp is not connected. Check WhatsApp page.');
+      setBulkSending(false);
+      return;
+    }
+
     let successCount = 0;
-    for (const residentId of Object.keys(byResident)) {
+    const residentIds = Object.keys(byResident);
+
+    for (const residentId of residentIds) {
       const resident = pendingPayments.find(p => (p.expand?.resident?.id || p.resident) === residentId)?.expand?.resident;
       if (!resident?.phone) continue;
+
       try {
         const message = buildReminderMessage(resident, byResident[residentId]);
-        const res = await fetch(`${WA_BASE}/api/whatsapp/broadcast`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phones: [resident.phone], message }),
-        });
-        if (res.ok) {
+        const res = await sendWhatsAppMessage(resident.phone, message);
+
+        if (res.success) {
           successCount++;
           setSent(s => ({ ...s, [residentId]: true }));
           await pb.collection('notifications').create({
-            resident: resident.id, payment: byResident[residentId][0]?.id || '',
-            message, sentAt: new Date().toISOString(), channel: 'whatsapp', status: 'sent',
+            resident: resident.id,
+            payment: byResident[residentId][0]?.id || '',
+            message,
+            sentAt: new Date().toISOString(),
+            channel: 'whatsapp',
+            status: 'sent',
           }).catch(() => {});
         }
         // Small delay between messages
-        await new Promise(r => setTimeout(r, 500));
-      } catch { /* skip failed */ }
+        await new Promise(r => setTimeout(r, 300));
+      } catch {
+        /* skip failed */
+      }
     }
-    setBulkResult(`✅ Reminders sent to ${successCount} of ${Object.keys(byResident).length} residents.`);
+
+    setBulkResult(`✅ Reminders successfully delivered to ${successCount} of ${residentIds.length} residents.`);
     setBulkSending(false);
   };
 
@@ -133,7 +144,7 @@ export default function NotificationsTab() {
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={fetchData} className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-all">
+          <button onClick={fetchData} className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-all" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button

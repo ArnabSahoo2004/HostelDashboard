@@ -39,7 +39,7 @@ const Dashboard: React.FC = () => {
         roomsCount: rooms.length,
         totalBeds: beds.length,
         occupiedBeds: beds.filter(b => b.status === 'occupied').length,
-        vacantBeds: beds.filter(b => b.status === 'vacant').length,
+        vacantBeds: beds.filter(b => b.status === 'vacant' || b.status === 'available').length,
         expectedRent: payments.reduce((sum, p) => sum + p.amount, 0),
         collectedRent: payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0),
         pendingRent: payments.filter(p => p.status === 'pending' || p.status === 'overdue').reduce((sum, p) => sum + p.amount, 0),
