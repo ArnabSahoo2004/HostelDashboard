@@ -21,7 +21,11 @@ import {
   Printer,
   Clock,
   CheckCircle2,
-  FileUp
+  FileUp,
+  Smartphone,
+  Eye,
+  EyeOff,
+  Send
 } from 'lucide-react';
 
 const Residents: React.FC = () => {
@@ -92,6 +96,13 @@ const Residents: React.FC = () => {
   const [checkOutDate, setCheckOutDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Loading & Error states inside Modals
+  // Student Mobile App Portal Management
+  const [isPortalModalOpen, setIsPortalModalOpen] = useState(false);
+  const [portalResident, setPortalResident] = useState<Resident | null>(null);
+  const [adminPortalPassword, setAdminPortalPassword] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [portalUpdateLoading, setPortalUpdateLoading] = useState(false);
+  const [portalSuccessMsg, setPortalSuccessMsg] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
@@ -223,6 +234,77 @@ const Residents: React.FC = () => {
     setAgreementNotes(res.agreementNotes || '');
     setModalError(null);
     setIsAgreementModalOpen(true);
+  };
+
+  const openPortalModal = (res: Resident) => {
+    setPortalResident(res);
+    setAdminPortalPassword(res.portalPassword || '');
+    setShowAdminPass(false);
+    setPortalSuccessMsg(null);
+    setIsPortalModalOpen(true);
+  };
+
+  const handleSavePortalPassword = async () => {
+    if (!portalResident) return;
+    if (!adminPortalPassword || adminPortalPassword.trim().length < 4) {
+      alert('Password must be at least 4 characters.');
+      return;
+    }
+    try {
+      setPortalUpdateLoading(true);
+      await pb.collection('residents').update(portalResident.id, {
+        portalPassword: adminPortalPassword.trim(),
+        portalActivated: true
+      });
+      setPortalSuccessMsg('Student app password saved successfully!');
+      setTimeout(() => setPortalSuccessMsg(null), 3000);
+      fetchResidents();
+    } catch (err: any) {
+      alert('Failed to update password: ' + err.message);
+    } finally {
+      setPortalUpdateLoading(false);
+    }
+  };
+
+  const handleGenerateRandomPass = () => {
+    if (!portalResident) return;
+    const cleanName = portalResident.fullName.split(' ')[0].replace(/[^a-zA-Z]/g, '') || 'Hostel';
+    const cleanPhone = (portalResident.phone || '').replace(/[^0-9]/g, '').slice(-4) || '2026';
+    setAdminPortalPassword(`${cleanName}@${cleanPhone}`);
+  };
+
+  const handleResetFirstLogin = async () => {
+    if (!portalResident) return;
+    if (!confirm('Reset to 1st login status? The student will be prompted to create a new password on their next login.')) return;
+    try {
+      setPortalUpdateLoading(true);
+      await pb.collection('residents').update(portalResident.id, {
+        portalPassword: '',
+        portalActivated: false
+      });
+      setAdminPortalPassword('');
+      setPortalSuccessMsg('Reset to 1st-login pending status!');
+      fetchResidents();
+    } catch (err: any) {
+      alert('Failed to reset: ' + err.message);
+    } finally {
+      setPortalUpdateLoading(false);
+    }
+  };
+
+  const handleShareCredentialsWhatsApp = () => {
+    if (!portalResident) return;
+    const cleanPhone = (portalResident.phone || '').replace(/[^0-9]/g, '').replace(/^91/, '');
+    const appUrl = `${window.location.origin}/student/login`;
+    const text = encodeURIComponent(
+      `Hello ${portalResident.fullName}! 🏠\n` +
+      `Here are your login credentials for the Satabdi Hostel Student Mobile App:\n\n` +
+      `📱 Mobile: ${portalResident.phone}\n` +
+      `🔑 Password: ${adminPortalPassword || '(Set during 1st login)'}\n` +
+      `🌐 App Login: ${appUrl}\n\n` +
+      `Log in to check your room details, pay dues via UPI, apply for leave, and view your digital ID pass!`
+    );
+    window.open(`https://wa.me/91${cleanPhone}?text=${text}`, '_blank');
   };
 
   const openCheckInModal = (res: Resident) => {
@@ -653,6 +735,23 @@ const Residents: React.FC = () => {
                               ID: {res.idProofNumber}
                             </span>
                           )}
+                          {res.portalActivated ? (
+                            <button
+                              onClick={() => openPortalModal(res)}
+                              className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded-md font-medium w-fit mt-0.5 transition-colors"
+                              title="Mobile App Active - Click to view/edit password"
+                            >
+                              <Smartphone className="w-2.5 h-2.5" /> App Active
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openPortalModal(res)}
+                              className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-800/80 hover:bg-slate-800 px-1.5 py-0.5 rounded-md font-medium w-fit mt-0.5 transition-colors"
+                              title="1st Login Pending - Click to set password"
+                            >
+                              <Smartphone className="w-2.5 h-2.5" /> 1st Login Pending
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -689,6 +788,13 @@ const Residents: React.FC = () => {
                               <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                             </a>
                             <button
+                            onClick={() => openPortalModal(res)}
+                            className="p-1.5 bg-slate-800 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 rounded-lg transition-colors border border-slate-700/60"
+                            title="Student Mobile App Credentials & Password"
+                          >
+                            <Smartphone className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                               onClick={() => openAgreementModal(res)}
                               className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
                               title="Manage / Replace Copy"
@@ -1690,6 +1796,132 @@ const Residents: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* =========================================================================
+          MODAL 6: STUDENT MOBILE APP CREDENTIALS & PASSWORD MANAGEMENT
+      ========================================================================= */}
+      {isPortalModalOpen && portalResident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Student App Portal Access</h3>
+                  <p className="text-xs text-slate-400">{portalResident.fullName} • {portalResident.phone}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPortalModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {portalSuccessMsg && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{portalSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Status Overview Card */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Portal Status
+                  </span>
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5 mt-0.5">
+                    {portalResident.portalActivated ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-emerald-400">Active (Logged In)</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span className="text-amber-400">Awaiting 1st Login</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleResetFirstLogin}
+                  disabled={portalUpdateLoading}
+                  className="text-[11px] text-slate-400 hover:text-rose-400 font-medium transition-colors"
+                  title="Reset to allow student to choose new password on next login"
+                >
+                  Reset 1st Login
+                </button>
+              </div>
+
+              {/* Password Management */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    App Login Password / PIN
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateRandomPass}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                  >
+                    + Auto-Generate
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showAdminPass ? 'text' : 'password'}
+                    placeholder="Set or view student password"
+                    value={adminPortalPassword}
+                    onChange={(e) => setAdminPortalPassword(e.target.value)}
+                    className="w-full p-3 pr-10 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 font-mono text-sm focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass(!showAdminPass)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300"
+                  >
+                    {showAdminPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Students can use this password to log in with their phone ({portalResident.phone}).
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleSavePortalPassword}
+                  disabled={portalUpdateLoading}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>{portalUpdateLoading ? 'Saving...' : 'Save Password in Database'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShareCredentialsWhatsApp}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Credentials via WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

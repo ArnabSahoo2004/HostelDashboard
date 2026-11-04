@@ -8,7 +8,6 @@ import Residents from './pages/Residents';
 import Payments from './pages/Payments';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
-
 import Maintenance from './pages/Maintenance';
 import PublicMaintenance from './pages/PublicMaintenance';
 import Notices from './pages/Notices';
@@ -17,6 +16,15 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import Sidebar from './components/layout/Sidebar';
 import Navbar from './components/layout/Navbar';
 
+// Student Portal Components
+import StudentLogin from './student/StudentLogin';
+import StudentAppLayout from './student/StudentAppLayout';
+import StudentHome from './student/pages/StudentHome';
+import StudentDues from './student/pages/StudentDues';
+import StudentServices from './student/pages/StudentServices';
+import StudentIDCard from './student/pages/StudentIDCard';
+import StudentProfile from './student/pages/StudentProfile';
+
 const App: React.FC = () => {
   const { admin, loading, error, login, logout, clearError } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -24,7 +32,20 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        {/* Public Login Route */}
+        {/* ========================================================
+            STUDENT MOBILE APP (CAPACITOR READY) ROUTES
+           ======================================================== */}
+        <Route path="/student/login" element={<StudentLogin />} />
+        <Route path="/student" element={<StudentAppLayout />}>
+          <Route index element={<StudentHome />} />
+          <Route path="dues" element={<StudentDues />} />
+          <Route path="services" element={<StudentServices />} />
+          <Route path="id" element={<StudentIDCard />} />
+          <Route path="profile" element={<StudentProfile />} />
+          <Route path="*" element={<Navigate to="/student" replace />} />
+        </Route>
+
+        {/* Public Admin Login Route */}
         <Route
           path="/login"
           element={
@@ -36,10 +57,12 @@ const App: React.FC = () => {
           }
         />
 
-        {/* Public Maintenance Route */}
+        {/* Public Maintenance Report Route */}
         <Route path="/report-issue" element={<PublicMaintenance />} />
 
-        {/* Protected Core Dashboard Shell */}
+        {/* ========================================================
+            PROTECTED CORE ADMIN DASHBOARD SHELL
+           ======================================================== */}
         <Route
           path="/*"
           element={

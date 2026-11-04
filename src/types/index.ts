@@ -50,6 +50,7 @@ export interface Resident {
   phone?: string | null;
   email?: string | null;
   idProofNumber?: string | null;
+  address?: string | null;
   emergencyContactName: string;
   emergencyContactPhone: string;
   fatherName?: string;
@@ -71,6 +72,10 @@ export interface Resident {
   agreementStartDate?: string;
   agreementEndDate?: string;
   agreementNotes?: string;
+  // Student Mobile Portal Auth
+  portalPassword?: string;
+  portalActivated?: boolean;
+  portalLastLogin?: string;
   created: string;
   expand?: any;
 }

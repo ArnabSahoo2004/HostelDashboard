@@ -45,10 +45,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, isOpen = false, onClose }) 
   ];
 
   const sidebarContent = (
-    <div className="flex flex-col justify-between h-full bg-slate-900 border-r border-slate-800">
+    <div className="flex flex-col justify-between h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-colors">
       <div className="flex flex-col">
         {/* Brand header */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800">
+        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-primary-600 to-sky-400 flex items-center justify-center shadow-lg shadow-primary-500/20 flex-shrink-0">
               <span className="text-white font-black text-base">{hostelName.charAt(0).toUpperCase()}</span>
@@ -97,7 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, isOpen = false, onClose }) 
       </div>
 
       {/* Logout Footer */}
-      <div className="p-4 border-t border-slate-800">
+      <div className="p-4 border-t border-slate-200 dark:border-slate-800">
         <button
           onClick={onLogout}
           className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-400 hover:bg-rose-950/20 border border-transparent hover:border-rose-500/20 transition-all"
